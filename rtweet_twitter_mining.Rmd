@@ -1,0 +1,332 @@
+---
+title: "Analyse von Twitter-Daten"
+subtitle: "Twitter & Textmmining"
+author: "Jan Kirenz"
+output:
+ html_document:
+  code_download: true 
+  css: style.css 
+  fig_height: 6
+  fig_width: 8
+  highlight: tango
+  number_sections: yes
+  theme: paper
+  toc: yes
+  toc_depth: 3
+  toc_float: 
+    collapsed: false
+    smooth_scroll: true 
+  df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+# Einrichtung der Twitter-Schnittstelle
+
+Zunächst müssen Sie sich bei Twitter [registrieren](https://apps.twitter.com). Falls Sie noch keinen Twitter-Account besitzen sollten, muss dieser zuvor erstellt werden.
+
+1. Klicken Sie auf *Sign in*, um sich mit Ihrem Twitter-Account anzumnelden. 
+
+2. *Create App* auswählen und die Felder entsprechend den Vorgaben ausfüllen. Tragen Sie bei dem Feld Callback URL diesen Wert ein: http://127.0.0.1:1410 Sie finden die benötigten Zugangsdaten im Anschluss unter dem Reiter *Keys and Access Tokens*. 
+
+3. Unter dem Feld *Application Actions* können Sie nun den benötigten Consumer Key und das Consumer Secret erzeugen.         
+
+# Zugriffe einrichten
+
+Laden Sie nun die benötigten R-Pakete:
+
+```{r message=FALSE, warning=FALSE}
+
+library(rtweet)
+library(tidyverse)
+library(wordcloud)
+library(tidytext)
+library(reshape2)
+library(textdata)
+
+```
+
+
+Setzen Sie Ihre eigenen Twitter-Zugriffsdaten ein und führen Sie die Zeilen aus (die bereits eingefügten Werte sind nur Platzhalter). 
+
+```{r include = FALSE}
+
+
+
+```
+
+```{r eval = FALSE}
+
+# Name der App
+appname <- ""
+
+# API key
+key <- ""
+
+# API secret 
+secret <- ""
+
+# Access token
+access_token <- ""
+
+# Access secret
+access_secret <- ""
+
+```
+
+
+```{r}
+
+twitter_token <- create_token(
+  app = appname,
+  consumer_key = key,
+  consumer_secret = secret,
+  access_token = access_token,
+  access_secret = access_secret)
+
+```
+
+# Daten aus Twitter importieren
+
+## Tweets
+
+Nutzung der Funktion `rtweet::search_tweets()` um Daten aus Twitter zu importieren:
+
+- q: Begriff, nach dem gesucht werden soll 
+- n: Anzahl der Tweets (maximal 18,000).
+
+Import von 100 tweets mit dem # Stuttgart: 
+
+```{r}
+
+tweets_df <- search_tweets(
+                          q = "#Nike",
+                          n = 10
+                          )
+```
+
+
+```{r}
+
+head(tweets_df, n = 4)
+
+```
+
+
+
+## Tweets ohne Retweets
+
+Erneuter Import ohne Retweets
+
+```{r}
+
+tweets_df <- search_tweets("#Nike", n = 100,
+                             include_rts = FALSE)
+
+```
+
+## Users
+
+Die Funktion `search_users()` kann verwendet werden um Nutzer anzuzeigen, die einen bestimmten # genutzt haben:
+
+```{r}
+
+users <- search_users("#Nike",
+                      n = 10)
+
+users
+
+```
+
+## Standorte
+
+```{r}
+
+users %>%
+  count(location, sort = TRUE) %>%
+  mutate(location = reorder(location, n)) %>%
+  top_n(n=10) %>%
+  filter(location != "") %>%
+  ggplot(aes(x = location, y = n)) +
+  geom_col() +
+  coord_flip() +
+      labs(x = "Anzahl",
+      y = "Standorte",
+      title = "Twitter Nutzer - Standorte ")
+
+```
+
+
+# Textmining
+
+Die folgenden Inhalte orientieren sich an dem Buch [Text Mining with R](http://tidytextmining.com/index.html) von Julia Silge und David Robinson. Dort finden Sie ausführliche Erklärungen zu allen folgenden Schritten.
+
+## Tokenisierung
+
+Zuerst wird jedes Wort als einzelne Zeile in einem Data Frame (hier als tweets) abgespeichert.
+
+```{r}
+library(tidytext)
+
+tweets <- 
+  tweets_df %>%
+  unnest_tokens(word, text)
+
+```
+
+## Entfernung der Stoppwörter
+
+Wir entfernen nun alle Stoppwörter (insb. Artikel und Konjunktionen), da diese für die Analysen irrelevant sind. Hinweis: alle nachfolgenden Analysen werden mit englischen Wörtern durchgeführt. Für die Analyse anderer Sprachen müssen entsprechend passende Stoppwörter und Lexikas verwendet werden.  
+
+```{r}
+
+data(stop_words)
+
+tweets <- tweets %>%
+  anti_join(stop_words)
+
+```
+
+## Analyse der Worthäufigkeiten
+
+Nun könnne wir z.B. die häufigsten Worte untersuchen.
+
+```{r}
+
+tweets %>%
+  count(word, sort = TRUE)
+
+```
+
+### Erweiterung der Stoppwörter
+
+Wie wir sehen, kommen immer noch Wörter vor, die wir nicht analysieren möchten (z.B. https, t.co). Diese werden nun in den Katalog der Stoppwörter mit aufgenommen. Wir erzeugen dafür einen neuen Katalog (custom_stop_words), welcher die ursprünglichen Stoppwörter (stop_words) und die von uns definierten Stoppwörter umfasst. 
+
+```{r}
+
+custom_stop_words <- bind_rows(tibble(word = c("https", "t.co", "amp"), 
+                                          lexicon = c("custom", "custom", "custom")),
+                               stop_words)
+
+tweets <- tweets %>%
+  anti_join(custom_stop_words)
+
+```
+
+### Visualisierung der Worthäufigkeiten
+
+```{r}
+
+tweets %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 5) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+
+```
+
+## Sentimentanalyse
+
+### Postitive Wörter
+
+Nun nutzen wir das [NRC-Lexikon](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm), um die positiven Wörter in den Tweets zu bestimmen.
+
+
+```{r}
+
+nrc_positive <- get_sentiments("nrc") %>% 
+  filter(sentiment == "positive")
+
+tweets %>%
+  inner_join(nrc_positive) %>%
+  count(word, sort = TRUE)
+
+```
+
+### Negative Wörter
+
+Die gleiche Vorgehensweise könenn wir für negative Wörter nutzen.
+
+```{r}
+
+nrc_negative <- get_sentiments("nrc") %>% 
+  filter(sentiment == "negative")
+
+tweets %>%
+  inner_join(nrc_negative) %>%
+  count(word, sort = TRUE)
+
+```
+
+### Übersicht über positive und negative Wörter
+
+Wir nutzen nun das [Bing-Lexikon](https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html) um sowohl positive als auch negative Wörter in einer Tabelle anzeigen zu lassen.
+
+```{r}
+
+bing_word_counts <- tweets %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+bing_word_counts
+```
+
+### Visualisierung der Sentimentanalyse mit Balkendiagrammen
+
+Das Ergebnis kann bspw. mit ggplot2 visualisiert werden.
+
+
+```{r}
+
+bing_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+
+```
+
+### Visualisierung der Sentimentanalyse mit Wortwolken
+
+Visualisierung mit einer Wortwolke.
+
+```{r}
+
+tweets %>%
+  anti_join(stop_words) %>%
+  anti_join(custom_stop_words) %>% 
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 10))
+
+```
+
+Unterteilung der Wortwolke in negative und positive Wörter.
+
+```{r}
+
+tweets %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                   max.words = 30)
+
+```
+
