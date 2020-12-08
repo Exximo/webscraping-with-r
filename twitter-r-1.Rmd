@@ -1,0 +1,184 @@
+---
+title: "Text-Mining mit Twitter-Daten"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(rtweet)
+library(tidyverse)
+
+```
+
+# Twitter einrichten
+
+Eigene Daten einsetzen:
+
+```{r}
+#Name der App
+
+appname <- ""
+
+# API key
+key <- ""
+
+# API secret 
+secret <- ""
+
+# Bearer token
+
+token <- ""
+
+# Access token
+access_token <- "-"
+
+# Access secret
+access_secret <- ""
+```
+
+
+```{r}
+
+twitter_token <- create_token(
+  app = appname,
+  consumer_key = key,
+  consumer_secret = secret,
+  access_token = access_token,
+  access_secret = access_secret)
+
+```
+
+# Daten importieren
+
+```{r}
+
+tweets_df <- search_tweets("#Nike", n = 1000,
+                             include_rts = FALSE)
+
+```
+
+In diesem Beispiel nutzen wir die Nike-Daten aus Twitter (siehe Google Sheets Tabelle).
+
+# Analyse der Tweets 
+
+
+## Standorte
+
+Einfache Auszählung
+
+```{r}
+
+# Option 1:
+tweets_df %>% 
+  count(location, 
+        sort=TRUE)
+
+# Option 2:
+count(tweets_df, location, sort=TRUE)
+
+```
+
+Plot erstellen
+
+```{r}
+
+tweets_df %>% 
+  count(location, 
+        sort = TRUE,
+        name = "Anzahl") %>% 
+  mutate(location = reorder(location, Anzahl)) %>% 
+  filter(location != "", 
+         location != "日本") %>%   
+  slice_max(Anzahl, n = 9) %>% 
+  ggplot(aes(x = location, y = Anzahl)) +
+    geom_col() +
+    coord_flip() +
+    labs( x = "Anzahl der Nutzer",
+          y = "Standorte",
+          title = "Twitter Nutzer - Standorte") +
+  theme_classic()
+
+```
+
+# Textmining
+
+## Tokenisierung
+
+```{r}
+library(tidytext)
+
+# Wir beschränken uns auf den Standort US
+tweets_df_usa <- 
+  tweets_df %>% 
+  filter(location == "United States")
+
+# Tokenisierung der Spalte text
+tweets_tokens <- 
+  tweets_df_usa %>% 
+  unnest_tokens(word, text)
+
+
+head(tweets_tokens$word)
+
+```
+
+## Entfernung von Stoppwörtern
+
+```{r}
+# Ist in dem Paket tidytext enthalten:
+data(stop_words)
+
+
+tweets_tokens <- 
+  tweets_tokens %>% 
+  anti_join(stop_words, 
+            by = "word")
+
+# Prüfung der Wörter
+tweets_tokens %>% 
+  count(word,
+        sort = TRUE)
+
+# Erstellung eigener Stopwörter
+custom_stop_words <- tibble( word = c("https", "t.co"))
+
+tweets_tokens <- 
+  tweets_tokens %>% 
+  anti_join(custom_stop_words, 
+            by = "word")
+
+```
+
+
+## Analyse der Worthäufigkeiten
+
+```{r}
+
+tweets_tokens %>% 
+  count(word,
+        sort = TRUE)
+
+```
+
+Plot:
+
+```{r}
+tweets_tokens %>% 
+  count(word, 
+        sort = TRUE,
+        name = "Anzahl") %>% 
+  mutate(word = reorder(word, Anzahl)) %>% 
+  slice_max(Anzahl, n = 9) %>% 
+  ggplot(aes(x = word, y = Anzahl)) +
+    geom_col(fill ="steelblue") +
+    coord_flip() +
+    labs( x = "Anzahl der Wörter",
+          y = "Wörter",
+          title = "Tweets - Worthäufigkeiten") +
+  theme_classic()
+
+```
+
+
+
