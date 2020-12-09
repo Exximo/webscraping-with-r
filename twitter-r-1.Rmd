@@ -243,4 +243,3 @@ bing_word_count %>%
   labs(y = "Häufigkeit der Nennung", x = NULL)
 
 ```
-
