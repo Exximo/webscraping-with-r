@@ -1,19 +1,24 @@
 library(tidyverse)
-
 library(rvest)
+
 # Seite definieren
-hdm_studycheck <- read_html("https://www.studycheck.de/studium/online-medien/hdm-stuttgart-15774")
+hdm_studycheck <- read_html("https://www.studycheck.de/studium/online-medien/hdm-stuttgart-15774/bewertungen")
+
 
 # Bewertungen mit CSS-Selektoren auswählen
-bewertungen_roh <- hdm_studycheck %>% 
+bewertungen_roh <- 
+  hdm_studycheck %>% 
         html_nodes(".item-text") %>%
         html_text() %>%
         as.character()
+
+bewertungen_roh
 
 # Daten in einen Dataframe umwandeln
 bewertungen_df <- tibble(bewertungen_roh)
 
 library(tidytext)
+
 # Unnest Tokens
 bewertungen <- 
   bewertungen_df %>%
@@ -21,14 +26,19 @@ bewertungen <-
 
 library(tm)
 # Stopwörter entfernen 
-stopwords <- tibble( word = stopwords('german'))
+
+stopwords <- tibble(word = stopwords('german'))
 
 bewertungen <- 
   bewertungen %>%
-  anti_join(stopwords)
+  anti_join(stopwords, by ="word")
+
 
 # Wörter zählen
-count(bewertungen, word, sort = TRUE)
+count(bewertungen, 
+      word, 
+      sort = TRUE)
+
 
 # Darstellung erzeugen
 bewertungen %>%
@@ -44,3 +54,5 @@ library(wordcloud)
 bewertungen %>%
   count(word, sort=TRUE) %>%
   with(wordcloud(word, n, max.words = 2))
+
+

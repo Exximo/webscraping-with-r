@@ -108,16 +108,15 @@ tweets_df %>%
 ```{r}
 library(tidytext)
 
-# Wir beschränken uns auf den Standort US
+# Wir beschränken uns auf Englisch
 tweets_df_usa <- 
   tweets_df %>% 
-  filter(location == "United States")
+  filter(lang == "en")
 
 # Tokenisierung der Spalte text
 tweets_tokens <- 
   tweets_df_usa %>% 
   unnest_tokens(word, text)
-
 
 head(tweets_tokens$word)
 
@@ -141,7 +140,7 @@ tweets_tokens %>%
         sort = TRUE)
 
 # Erstellung eigener Stopwörter
-custom_stop_words <- tibble( word = c("https", "t.co"))
+custom_stop_words <- tibble(word = c("https", "t.co"))
 
 tweets_tokens <- 
   tweets_tokens %>% 
@@ -169,7 +168,7 @@ tweets_tokens %>%
         sort = TRUE,
         name = "Anzahl") %>% 
   mutate(word = reorder(word, Anzahl)) %>% 
-  slice_max(Anzahl, n = 9) %>% 
+  slice_max(Anzahl, n = 10) %>% 
   ggplot(aes(x = word, y = Anzahl)) +
     geom_col(fill ="steelblue") +
     coord_flip() +
@@ -180,5 +179,68 @@ tweets_tokens %>%
 
 ```
 
+# Sentimentanalyse
 
+## Positive Wörter
+
+NRC-Lexikon
+
+```{r}
+
+nrc_positive <- 
+  get_sentiments("bing") %>% 
+  filter(sentiment == "positive")
+
+
+tweets_tokens %>% 
+  inner_join(nrc_positive, by = "word") %>% 
+  count(word, 
+        sort=TRUE)
+
+```
+
+
+## Negative Wörter
+
+NRC-Lexikon
+
+```{r}
+
+nrc_negative <- 
+  get_sentiments("bing") %>% 
+  filter(sentiment == "negative")
+
+tweets_tokens %>% 
+  inner_join(nrc_negative, by = "word") %>% 
+  count(word, 
+        sort=TRUE)
+
+```
+
+## Übersicht
+
+```{r}
+
+bing_word_count <- tweets_tokens %>% 
+  inner_join(get_sentiments("bing")) %>% 
+  count(word, sentiment, sort = TRUE)
+
+bing_word_count
+```
+
+```{r}
+
+bing_word_count %>% 
+  group_by(sentiment) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~ sentiment, 
+             scales = "free_y") +
+  labs(y = "Häufigkeit der Nennung", x = NULL)
+
+```
 
